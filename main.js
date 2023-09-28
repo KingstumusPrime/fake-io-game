@@ -102,9 +102,9 @@ class Player extends entity{
         if(keys.mouse.v){
             keys.mouse.framesSince += 1;
         }
-        if(keys.mouse.v == true && keys.mouse.framesSince % 10 == 0) { // mouse button down fire bullet
+        if(keys.mouse.v == true && keys.mouse.framesSince % 12 == 0) { // mouse button down fire bullet
             const mag = Math.sqrt((mx - this.x) * (mx - this.x) + (my - this.y) * (my - this.y));
-            world.appendField("bullets", new Bullet(this.x, this.y, 10, 10, 1, (mx - this.x) / mag, (my - this.y) / mag));
+            world.appendField("bullets", new Bullet(this.x, this.y, 10, 10, 7, (mx - this.x) / mag, (my - this.y) / mag));
         }
     }
 
@@ -199,7 +199,7 @@ canvas.onmousedown = function(e) {
     keys.mouse.framesSince = 0; // reset the mouse timer
  }
 var keys = {"up" :false, "down" : false, "left": false, "right": false, mouse: {v: false, framesSince: 0}};
-var p = new Player(10, 10, 20, 10, 10, "aTest", 3);
+var p = new Player(10, 10, 20, 10, 7, "aTest", 3);
 var mx; // mouse x updated on click
 var my; // mouse y updated on click
 var world = new World([Player], []);
