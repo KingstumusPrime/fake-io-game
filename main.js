@@ -27,7 +27,10 @@ class actor{ // base class for all players/objects
     draw(ctx){return;} // draw function takes in the context
     onKill(){return}; // called when we run out of health
     inBounds(a){ // since all objects are squares (or could be squares just check if the x/y is correct the scale variable is how wide/tall the bounds are)
-        return a.x <= this.scale + this.x && a.x >= this.x && a.y <= this.scale + this.y && a.y <= this.y;
+        return  this.x < a.x + a.scale &&
+        this.x + this.scale > a.x &&
+        this.y < a.y + a.scale &&
+        this.y + this.scale > a.y;
     }
 }
 
@@ -44,10 +47,6 @@ class entity extends actor{ // something that moves on the server
     checkCollides(a){ // two way collision function
         if(this.inBounds(a)){
             this.onCollide(a);
-            a.onCollide(this);
-            if(a.health <= 0){
-                a.onKill();
-            }
             if(this.health <= 0){
                 this.onKill();
             }
@@ -55,8 +54,8 @@ class entity extends actor{ // something that moves on the server
     }
 
     onCollide(a){
-        if(a.health != null){
-            a.health -= this.hurts;
+        if(this.health != null && a.health != null){
+            this.health -= a.hurts;
         }
     }
 }
@@ -104,7 +103,7 @@ class Player extends entity{
         }
         if(keys.mouse.v == true && keys.mouse.framesSince % 12 == 0) { // mouse button down fire bullet
             const mag = Math.sqrt((mx - this.x) * (mx - this.x) + (my - this.y) * (my - this.y));
-            world.appendField("bullets", new Bullet(this.x, this.y, 10, 10, 7, (mx - this.x) / mag, (my - this.y) / mag));
+            world.appendField("bullets", new Bullet(this.x, this.y, 10, 10, 7, (mx - this.x) / mag, (my - this.y) / mag, 0,this.id + Math.random(), -1) );
         }
     }
 
@@ -112,7 +111,27 @@ class Player extends entity{
         ctx.fillRect(this.x, this.y, this.scale, this.scale); // just draw a square
     }
     
+    onKill(){
+        //console.log("IM DEAD 💀💀💀");
+        this.scale = 0;
+        delete world.objects.entities[this.id]; // remove from world
+    }
+}
 
+class Enemy extends entity{ // enemy is anyone else playing on your end you are player on theres you are enemy
+    constructor(x, y, scale, hurts, id="", health=-1){
+        super(x, y, scale, hurts, "enemy", id, health); //call the entities constructor
+    }
+
+    draw(ctx){
+        ctx.fillRect(this.x, this.y, this.scale, this.scale); // just draw a square
+    }
+
+    onKill(){
+        //console.log("IM DEAD 💀💀💀");
+        this.scale = 0;
+        delete world.objects.entities[this.id]; // remove from world
+    }
 }
 
 // bullet class
@@ -130,7 +149,14 @@ class Bullet extends entity{
     }
     
     update(){
-        this.moveBy(this.vx, this.vy); // just move
+        this.moveBy(this.vx, this.vy); // just movess
+        this.dist -= this.vx + this.vy;
+    }
+
+    onKill(){
+        console.log("IM DEAD 💀💀💀");
+        this.scale = 0;
+        delete world.objects.bullet[this.id]; // remove ourself from world
     }
 
 }
@@ -139,17 +165,27 @@ class Bullet extends entity{
 class World {
     constructor(entities, actors){
         this.objects = {
-            "entities": entities,
-            "actors": actors
-        }
+            "entities": {},
+            "actors": {}
+        };
+        entities.forEach(e => {
+            this.objects["entities"][e.id] = e;
+        })
+        actors.forEach(e => {
+            this.objects["actors"][e.id] = e;
+        })
     }
 
     newField(name, value){
-        this.objects[name] = value;
+        this.objects[name] = {};
+        value.forEach(e => {
+            this.objects[name][e.id] = e;
+        })
     }
 
     appendField(name, value){
-        this.objects[name].push(value);
+        console.log(value);
+        this.objects[name][value.id] = value;
     }
 }
 
@@ -199,21 +235,38 @@ canvas.onmousedown = function(e) {
     keys.mouse.framesSince = 0; // reset the mouse timer
  }
 var keys = {"up" :false, "down" : false, "left": false, "right": false, mouse: {v: false, framesSince: 0}};
-var p = new Player(10, 10, 20, 10, 7, "aTest", 3);
+var p = new Player(0, 0, 20, 10, 7, "aTest", 1);
+var enemy = new Enemy(100, 100, 25, 10, "e1", 30);
 var mx; // mouse x updated on click
 var my; // mouse y updated on click
-var world = new World([Player], []);
+var world = new World([p, enemy], []);
 world.newField("bullets", []); // stores all bullets
+console.log(p.health)
 function update(){
     ctx.clearRect(0, 0, canvas.width, canvas.height); // clear canvas
     p.checkKeys(keys);
-    p.update();
-    world.objects["bullets"].forEach(e => {
-        e.update();
-        e.draw(ctx);
+    // update entities
+    Object.keys(world.objects["entities"]).forEach(e => {
+        world.objects["entities"][e].update();
+        world.objects["entities"][e].draw(ctx);
     });
-    p.draw(ctx);
+    // update bullets
+    Object.keys(world.objects["bullets"]).forEach(e => {
+        world.objects["bullets"][e].update();
+        world.objects["bullets"][e].draw(ctx);
+    });
+    // check for collisions
+    Object.keys(world.objects["entities"]).forEach(enemy => {
+        if(enemy != p.id){ // not the player
+            p.checkCollides(world.objects["entities"][enemy]); // calls the checkCollides event for both
+        }
+
+    })
     window.requestAnimationFrame(update);
 }
 
 update();
+
+(async function() {
+    const ws = await connectToServer();
+})
