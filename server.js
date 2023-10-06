@@ -1,14 +1,15 @@
-const { json } = require('stream/consumers');
 const WebSocket = require('ws');
 const ws = new WebSocket.Server({ port: 7071 }); //init a websockets
 
 const clients = new Map(); // everyone connected
-
+const servers = new Map();
 ws.on("connection", (w) => {
     // joining code here
     const id = uuidv4();
-    const metadata = {id};
-    clients.set(ws, metadata);
+    const metadata = {id: id, uid: null};
+    clients.set(w, metadata);
+    servers.set(id, w);
+
 
     w.on('message', m => {
         // update code here
@@ -17,13 +18,29 @@ ws.on("connection", (w) => {
         const metadata = clients.get(w);
 
         console.log(metadata.id + " is making the request for: " + m);
-
+        if(message.type == "join"){
+            clients.get(w)["uid"] = message.id;
+            [...clients.keys()][0].send(JSON.stringify({type: "getW", socket: metadata.id}));
+        }
+        if(message.type == "giveW"){ // give w is server only
+            servers.get(message.socket).send(JSON.stringify({type: "receiveW", world: message.world})); // send the world
+        }else{
         [...clients.keys()].forEach((client) => {
-            client.send(message);
+            if(client != w){
+                client.send(JSON.stringify(message));
+            }
+
         })
+        }
     })
 
-    ws.on("close", () => {
+    w.on("close", () => {
+        [...clients.keys()].forEach((client) => {
+            if(client != w){
+                client.send(JSON.stringify({type: "leave",id: clients.get(w).uid})); // tell all clients someone left
+            }
+
+        })
         clients.delete(w);
     });
 })
