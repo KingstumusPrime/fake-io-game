@@ -1,9 +1,44 @@
+function checkTicTacToe(board) {
+    // Check for rows
+    for (let i = 0; i < 3; i++) {
+      if (board[i * 3] === board[i * 3 + 1] && board[i * 3 + 1] === board[i * 3 + 2] && board[i * 3] !== "") {
+        return board[i * 3] + " wins!"; // Player has won
+      }
+    }
+  
+    // Check for columns
+    for (let i = 0; i < 3; i++) {
+      if (board[i] === board[i + 3] && board[i + 3] === board[i + 6] && board[i] !== "") {
+        return board[i] + " wins!"; // Player has won
+      }
+    }
+  
+    // Check for diagonals
+    if (board[0] === board[4] && board[4] === board[8] && board[0] !== "") {
+      return board[0] + " wins!"; // Player has won
+    }
+    if (board[2] === board[4] && board[4] === board[6] && board[2] !== "") {
+      return board[2]  + " wins!";// Player has won
+    }
+  
+    // Check for tie
+    for (let i = 0; i < 9; i++) {
+      if (board[i] === "") {
+        return ""; // Game is not over yet
+      }
+    }
+  
+    // Game is a tie
+    return "tie";
+  }
+
 const canvas = document.querySelector("#canvas"); // get the canvas
 const ctx = canvas.getContext("2d"); // the context
 var marginL = 0;
 var marginT = 0;
-canvas.width = 2000;
-canvas.height = 2000;
+canvas.width = 2700;
+canvas.height = 2700;
+var board = ["", "", "", "", "", "", "", "", ""]
 
 function uuidv4() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -113,19 +148,19 @@ class Player extends entity{
             world.appendField("bullets", new Bullet(this.x + this.scale/2, this.y + this.scale/2, 10, 10, 7, (mx - this.x) / mag, (my - this.y) / mag, 0,this.id + rand, this.clan, 1) );
             ws.send(JSON.stringify({type: "bullet", x: this.x + this.scale/2 , y: this.y + this.scale/2, mx: mx, my: my, parent: this.clan, id: this.id + rand }));
         }
-        if(this.x + 500 + marginL > window.screen.width){
+        if(this.x +  marginL > window.screen.width * 0.4){
             marginL -= 7;
             canvas.style.marginLeft = marginL + "px";
         }
-        if(this.x + marginL < 500){
+        if(this.x + marginL < window.screen.width * 0.6){
             marginL += 7;
             canvas.style.marginLeft = marginL + "px";
         }
-        if(this.y + 500 + marginT > window.screen.height){
+        if(this.y + window.screen.height/8 + marginT > window.screen.height/2){
             marginT -= 7;
             canvas.style.marginTop = marginT + "px";
         }
-        if(this.y + marginT < 500){
+        if(this.y + marginT < window.screen.height/2){
             marginT += 7;
             canvas.style.marginTop = marginT + "px";
         }
@@ -151,7 +186,6 @@ class px extends Player{ // player that is an x
     draw(ctx){
         ctx.save(); // get settings
         ctx.strokeStyle = "black";
-        ctx.fillRect(this.x, this.y, this.scale, this.scale)
         ctx.lineWidth = this.scale/4;
         ctx.beginPath();
         const x = this.x + this.scale/2
@@ -185,7 +219,6 @@ class po extends Player{ // player that is an O
 
     // changed draw function
     draw(ctx){
-        ctx.fillRect(this.x, this.y, this.scale, this.scale)
         ctx.save();
         ctx.strokeStyle = "black";
         ctx.lineWidth = this.scale/4;
@@ -216,7 +249,6 @@ class ex extends Enemy{
     draw(ctx){
         ctx.save(); // get settings
         ctx.strokeStyle = "black";
-        ctx.fillRect(this.x, this.y, this.scale, this.scale)
         ctx.lineWidth = this.scale/4;
         ctx.beginPath();
         const x = this.x + this.scale/2
@@ -250,7 +282,6 @@ class eo extends Enemy{
 
     // changed draw function
     draw(ctx){
-        ctx.fillRect(this.x, this.y, this.scale, this.scale)
         ctx.save();
         ctx.strokeStyle = "black";
         ctx.lineWidth = this.scale/4;
@@ -302,13 +333,14 @@ class Bullet extends entity{
 // the zone that is captured
 class Zone extends entity{
     constructor(x, y, scale, hurts, id){
-        super(x, y, scale, hurts, "zone", id, 800); //call the entities constructor
+        super(x, y, scale, hurts, "zone", id, 350); //call the entities constructor
         this.capped = {"X": this.maxHealth, "O" : this.maxHealth};
     }
 
 
     draw(ctx){
         const scale = this.scale * 0.5; // half of the box is used
+        ctx.save();
         ctx.font = "48px serif";
         if(this.capped["O"] != this.maxHealth){
             this.health = this.capped["O"];
@@ -323,6 +355,7 @@ class Zone extends entity{
         ctx.strokeRect(this.x, this.y, this.scale, this.scale);
         ctx.strokeRect(this.x + (this.scale - (this.scale * (this.health/this.maxHealth)))/2, this.y+ (this.scale - (this.scale * (this.health/this.maxHealth)))/2, this.scale * (this.health/this.maxHealth), this.scale * (this.health/this.maxHealth));
         if(this.capped["X"] <= 0){ // the zone is captured by an X
+            board[this.id] = "X"
             ctx.save(); // get settings
             ctx.strokeStyle = "red";
             ctx.lineWidth = scale/4;
@@ -337,6 +370,7 @@ class Zone extends entity{
             ctx.stroke();
             ctx.restore();
         }else if(this.capped["O"] <= 0){
+            board[this.id] = "O"
             ctx.save();
             ctx.strokeStyle = "blue";
             ctx.lineWidth = scale/4;
@@ -345,6 +379,7 @@ class Zone extends entity{
             ctx.stroke();
             ctx.restore();
         }
+        ctx.restore();
     }
 
 
@@ -492,6 +527,7 @@ var keys = {"up" :false, "down" : false, "left": false, "right": false, mouse: {
 var mx; // mouse x updated on click
 var my; // mouse y updated on click
 var enemyOnZ = false; // used to keep track if any enemies are on zones
+var fSinceW = 0; // how many frames since a win
 function update(){
 
     ctx.clearRect(0, 0, canvas.width, canvas.height); // clear canvas
@@ -522,7 +558,19 @@ function update(){
         }
 
     })
+    if(checkTicTacToe(board) != ""){
+        ctx.fillText(checkTicTacToe(board), window.screen.width/2 - marginL,  window.screen.height/2 - marginT);
+        fSinceW += 1;
+        if(fSinceW == 1000){
+            p.onKill();
+            Object.keys(world.objects["zones"]).forEach(zone => {
+                world.objects["zones"][zone].capped["X"] = world.objects["zones"][zone].maxHealth;
+                world.objects["zones"][zone].capped["O"] = world.objects["zones"][zone].maxHealth;
+            })
+        }
+    }
     window.requestAnimationFrame(update);
+
 }
 
 async function connectToServer() {
@@ -541,7 +589,16 @@ var clan = "X"; // what side we are on
 var p; // us
 var world; // the world
 var connected = false; // used to wait until we connnected to server
-const z = new Zone(300, 0, 600, 0, "hello");
+const z1 = new Zone(300, 300, 600, 0, 0);
+const z2 = new Zone(1100, 300, 600, 0, 1);
+const z3 = new Zone(1800, 300, 600, 0, 2);
+const z4 = new Zone(300, 1100, 600, 0, 3);
+const z5 = new Zone(1100, 1100, 600, 0, 4);
+const z6 = new Zone(1800, 1100,600, 0, 5);
+const z7 = new Zone(300, 1800, 600, 0, 6);
+const z8 = new Zone(1100, 1800, 600, 0, 7);
+const z9 = new Zone(1800, 1800, 600, 0, 8);
+
 async function init() {
     ws = await connectToServer();
     ws.send(JSON.stringify({type: "getClan"})); // ask server what clan we are on
@@ -624,13 +681,13 @@ async function init() {
             console.log(clan)
                 // create the world
             if(clan == "X"){
-                p = new px(Math.floor(Math.random() * 150), 0, 52, 10, 7, uuidv4(), 30);
+                p = new px( Math.floor(Math.random() * canvas.width), Math.floor(Math.random() * canvas.height), 52, 10, 7, uuidv4(), 60);
             }else if (clan == "O"){
-                p = new po(Math.floor(Math.random() * 150), 0, 52, 10, 7, uuidv4(), 30);
+                p = new po( Math.floor(Math.random() * canvas.width), Math.floor(Math.random() * canvas.height), 52, 10, 7, uuidv4(), 60);
             }
             world = new World([p], []);
             world.newField("bullets", []); // stores all bullets
-            world.newField("zones", [z]); // stores all bullets
+            world.newField("zones", [z1, z2, z3, z4, z5, z6, z7, z8, z9]); // stores all bullets
 
             ws.send(JSON.stringify({"type": "join", "id": p.id, "clan": clan}));
 
