@@ -3,6 +3,7 @@ const ws = new WebSocket.Server({ port: 7071 }); //init a websockets
 
 const clients = new Map(); // everyone connected
 const servers = new Map();
+let isX = false; // goes O then X then O then X then O then X ect..
 ws.on("connection", (w) => {
     // joining code here
     const id = uuidv4();
@@ -21,10 +22,23 @@ ws.on("connection", (w) => {
         if(message.type == "join"){
             clients.get(w)["uid"] = message.id;
             [...clients.keys()][0].send(JSON.stringify({type: "getW", socket: metadata.id}));
+            [...clients.keys()].forEach((client) => {
+                if(client != w){
+                    client.send(JSON.stringify(message));
+                }
+    
+            })
         }
-        if(message.type == "giveW"){ // give w is server only
+
+        else if(message.type == "giveW"){ // give w is server only
             servers.get(message.socket).send(JSON.stringify({type: "receiveW", world: message.world})); // send the world
-        }else{
+        }
+        else if(message.type == "getClan"){
+            console.log("YESSIR")
+            w.send(JSON.stringify({type: "getClan", clan: (isX? "X" : "O") }));
+            isX = !isX;
+        }
+        else{
         [...clients.keys()].forEach((client) => {
             if(client != w){
                 client.send(JSON.stringify(message));

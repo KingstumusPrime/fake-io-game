@@ -1,7 +1,9 @@
 const canvas = document.querySelector("#canvas"); // get the canvas
 const ctx = canvas.getContext("2d"); // the context
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+var marginL = 0;
+var marginT = 0;
+canvas.width = 2000;
+canvas.height = 2000;
 
 function uuidv4() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -81,22 +83,24 @@ class Player extends entity{
     constructor(x, y, scale, hurts, speed, id="", health=-1){
         super(x, y, scale, hurts, "player", id, health); //call the entities constructor
         this.speed = speed;
+        this.clan = clan;
     }
 
     checkKeys(keys){ // keys contains up down left and right as bools
-        if(keys.left){
+
+        if(keys.left && !(this.x < 0)){
             this.moveBy(-this.speed, 0);
             ws.send(JSON.stringify({type: "movement", "x": p.x, "y": p.y, id: this.id})); // send our new position to the server
         }
-        if(keys.right){
+        if(keys.right && !(this.x  + this.scale > canvas.width)){
             this.moveBy(this.speed, 0);
             ws.send(JSON.stringify({type: "movement","x": p.x, "y": p.y, id: this.id})); // send our new position to the server
         }
-        if(keys.up){
+        if(keys.up && !(this.y < 0)){
             this.moveBy(0, -this.speed);
             ws.send(JSON.stringify({type: "movement","x": p.x, "y": p.y, id: this.id})); // send our new position to the server
         }
-        if(keys.down){
+        if(keys.down && !(this.y  + this.scale > canvas.height)){
             this.moveBy(0, this.speed);
             ws.send(JSON.stringify({type: "movement","x": p.x, "y": p.y, id: this.id})); // send our new position to the server
         }
@@ -106,11 +110,80 @@ class Player extends entity{
         if(keys.mouse.v == true && keys.mouse.framesSince % 12 == 0) { // mouse button down fire bullet
             const mag = Math.sqrt((mx - this.x) * (mx - this.x) + (my - this.y) * (my - this.y));
             const rand = Math.random();
-            world.appendField("bullets", new Bullet(this.x + this.scale/2, this.y + this.scale/2, 10, 10, 7, (mx - this.x) / mag, (my - this.y) / mag, 0,this.id + rand, this.id, 1) );
-            ws.send(JSON.stringify({type: "bullet", x: this.x + this.scale/2 , y: this.y + this.scale/2, mx: mx, my: my, parent: this.id, id: this.id + rand }));
+            world.appendField("bullets", new Bullet(this.x + this.scale/2, this.y + this.scale/2, 10, 10, 7, (mx - this.x) / mag, (my - this.y) / mag, 0,this.id + rand, this.clan, 1) );
+            ws.send(JSON.stringify({type: "bullet", x: this.x + this.scale/2 , y: this.y + this.scale/2, mx: mx, my: my, parent: this.clan, id: this.id + rand }));
+        }
+        if(this.x + 500 + marginL > window.screen.width){
+            marginL -= 7;
+            canvas.style.marginLeft = marginL + "px";
+        }
+        if(this.x + marginL < 500){
+            marginL += 7;
+            canvas.style.marginLeft = marginL + "px";
+        }
+        if(this.y + 500 + marginT > window.screen.height){
+            marginT -= 7;
+            canvas.style.marginTop = marginT + "px";
+        }
+        if(this.y + marginT < 500){
+            marginT += 7;
+            canvas.style.marginTop = marginT + "px";
         }
     }
 
+    onKill(){
+        this.x = Math.floor(Math.random() * canvas.width);
+        this.y = Math.floor(Math.random() * canvas.height);
+        this.health = this.maxHealth;
+        ws.send(JSON.stringify({type: "reset", id: this.id, x: this.x, y: this.y, health: this.health}))
+    }
+
+    
+}
+
+class px extends Player{ // player that is an x
+    constructor(x, y, scale, hurts, speed, id="", health=-1){
+        super(x, y, scale, hurts, "X", id, health); //call the player constructor
+        this.speed = speed;
+    }
+
+    // only difference is drawing it
+    draw(ctx){
+        ctx.save(); // get settings
+        ctx.strokeStyle = "black";
+        ctx.fillRect(this.x, this.y, this.scale, this.scale)
+        ctx.lineWidth = this.scale/4;
+        ctx.beginPath();
+        const x = this.x + this.scale/2
+        const y = this.y + this.scale/2
+        ctx.moveTo(x - this.scale/2, y - this.scale/2);
+        ctx.lineTo(x + this.scale/2, y + this.scale/2);
+    
+        ctx.moveTo(x + this.scale/2, y - this.scale/2);
+        ctx.lineTo(x - this.scale/2, y + this.scale/2);
+        ctx.stroke();
+        const  s = this.scale*(this.health/this.maxHealth)
+        // outer x that shows health
+        ctx.strokeStyle = "red";
+        ctx.beginPath();
+
+        ctx.moveTo(x - s/2, y - s/2);
+        ctx.lineTo(x + s/2, y + s/2);
+    
+        ctx.moveTo(x + s/2, y - s/2);
+        ctx.lineTo(x - s/2, y + s/2);
+        ctx.stroke();
+        ctx.restore(); // undo our changes to the ctx
+    }
+}
+
+class po extends Player{ // player that is an O
+    constructor(x, y, scale, hurts, speed, id="", health=-1){
+        super(x, y, scale, hurts, "O", id, health); //call the player constructor
+        this.speed = speed;
+    }
+
+    // changed draw function
     draw(ctx){
         ctx.fillRect(this.x, this.y, this.scale, this.scale)
         ctx.save();
@@ -121,16 +194,23 @@ class Player extends entity{
         ctx.stroke();
         ctx.strokeStyle = "blue";
         ctx.beginPath();
-        ctx.arc(this.x + this.scale/2,this.y + this.scale/2,this.scale/2,0,((this.health/this.maxHealth) * 360)*(Math.PI/180));
+        ctx.arc(this.x + this.scale/2,this.y + this.scale/2,this.scale/2,0,((this.health/this.maxHealth) * 360)*(Math.PI/180), false);
         ctx.stroke();
         ctx.restore();
     }
-    
 }
 
 class Enemy extends entity{ // enemy is anyone else playing on your end you are player on theres you are enemy
-    constructor(x, y, scale, hurts, id="", health=-1){
+    constructor(x, y, scale, hurts, id="", health=-1, clan=""){
         super(x, y, scale, hurts, "enemy", id, health); //call the entities constructor
+        this.clan = clan;
+    }
+}
+
+// enemy that looks like X
+class ex extends Enemy{
+    constructor(x, y, scale, hurts, id="", health=-1){
+        super(x, y, scale, hurts, id, health, "X"); //call the entities constructor
     }
 
     draw(ctx){
@@ -160,7 +240,29 @@ class Enemy extends entity{ // enemy is anyone else playing on your end you are 
         ctx.stroke();
         ctx.restore(); // undo our changes to the ctx
     }
+}
 
+// enemy that looks like O
+class eo extends Enemy{
+    constructor(x, y, scale, hurts, id="", health=-1){
+        super(x, y, scale, hurts, id, health, "O"); //call the entities constructor
+    }
+
+    // changed draw function
+    draw(ctx){
+        ctx.fillRect(this.x, this.y, this.scale, this.scale)
+        ctx.save();
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = this.scale/4;
+        ctx.beginPath();
+        ctx.arc(this.x + this.scale/2,this.y + this.scale/2,this.scale/2,0,360);
+        ctx.stroke();
+        ctx.strokeStyle = "blue";
+        ctx.beginPath();
+        ctx.arc(this.x + this.scale/2,this.y + this.scale/2,this.scale/2,0,((this.health/this.maxHealth) * 360)*(Math.PI/180), false);
+        ctx.stroke();
+        ctx.restore();
+    }
 }
 
 // bullet class
@@ -175,7 +277,13 @@ class Bullet extends entity{
     }
 
     draw(ctx){
+        if(this.parent == "X"){
+            ctx.fillStyle = "red";
+        }else{
+            ctx.fillStyle = "blue";
+        }
         ctx.fillRect(this.x, this.y, this.scale, this.scale); // just draw a square
+        ctx.fillStyle = "black"
     }
     
     update(){
@@ -189,6 +297,103 @@ class Bullet extends entity{
         delete world.objects["bullets"][this.id];
         ws.send(JSON.stringify({type: "killB", id: this.id}));
     }
+}
+
+// the zone that is captured
+class Zone extends entity{
+    constructor(x, y, scale, hurts, id){
+        super(x, y, scale, hurts, "zone", id, 800); //call the entities constructor
+        this.capped = {"X": this.maxHealth, "O" : this.maxHealth};
+    }
+
+
+    draw(ctx){
+        const scale = this.scale * 0.5; // half of the box is used
+        ctx.font = "48px serif";
+        if(this.capped["O"] != this.maxHealth){
+            this.health = this.capped["O"];
+            ctx.strokeStyle = "blue";
+        }else if(this.capped["X"] != this.maxHealth){
+            this.health = this.capped["X"];
+            ctx.strokeStyle = "red";
+        }
+
+
+
+        ctx.strokeRect(this.x, this.y, this.scale, this.scale);
+        ctx.strokeRect(this.x + (this.scale - (this.scale * (this.health/this.maxHealth)))/2, this.y+ (this.scale - (this.scale * (this.health/this.maxHealth)))/2, this.scale * (this.health/this.maxHealth), this.scale * (this.health/this.maxHealth));
+        if(this.capped["X"] <= 0){ // the zone is captured by an X
+            ctx.save(); // get settings
+            ctx.strokeStyle = "red";
+            ctx.lineWidth = scale/4;
+            ctx.beginPath();
+            const x = this.x + this.scale/2
+            const y = this.y + this.scale/2
+            ctx.moveTo(x - scale/2, y - scale/2);
+            ctx.lineTo(x + scale/2, y + scale/2);
+        
+            ctx.moveTo(x + scale/2, y - scale/2);
+            ctx.lineTo(x - scale/2, y + scale/2);
+            ctx.stroke();
+            ctx.restore();
+        }else if(this.capped["O"] <= 0){
+            ctx.save();
+            ctx.strokeStyle = "blue";
+            ctx.lineWidth = scale/4;
+            ctx.beginPath();
+            ctx.arc(this.x + this.scale/2,this.y + this.scale/2,scale/2,0,360);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+
+    onCollide(a){
+        if(this.health != null && a.health != null && this.capped["X"] > 0 && this.capped["O"] > 0){
+            if(a.clan == "X"){
+                this.capped[a.clan] -= a.hurts;
+                this.capped["O"] = this.maxHealth;
+                ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.capped[a.clan], clan: a.clan}));
+                ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.maxHealth, clan: "O"}));
+            }else{
+                this.capped[a.clan] -= a.hurts;
+                this.capped["X"] = this.maxHealth;
+                ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.capped[a.clan], clan: a.clan}));
+                ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.maxHealth, clan: "X"}));
+            }
+        }
+        if(this.health <= 0){
+            ws.send(JSON.stringify({"type": "zoneCap", id: this.id, clan: this.capped}));
+        }
+    }
+
+    checkInZone(e){ // e is a array of entities
+        if(this.capped["X"] == 0 || this.capped["O"] == 0){return;} // do not check if capped
+        let hasX = 0;
+        let hasO = 0;
+        e.forEach(entity => {
+            if(this.inBounds(entity)){
+                if(entity.clan == "X"){
+                    hasX += 1;
+                }else if(entity.clan == "O"){
+                    hasO += 1;
+                }
+            }
+        });
+        console.log(hasO);
+        if(hasX > 0 && !hasO > 0){
+            this.capped["X"] -= 1;
+            this.capped["O"] = this.maxHealth;
+            ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.capped["X"], clan: "X"}));
+            ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.maxHealth, clan: "O"}));
+        } else if(!hasX > 0 && hasO > 0){
+            this.capped["O"] -= 1;
+            this.capped["X"] = this.maxHealth;
+            ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.capped["O"], clan: "O"}));
+            ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.maxHealth, clan: "X"}));
+        }
+    }
+
 }
 
 // A basic holder for assorted objects (players, bullets, ect)
@@ -221,9 +426,20 @@ class World {
         Object.keys(w.entities).forEach((id) => {
             const e = w.entities[id];
             if(e.id != p.id){
-                this.objects.entities[e.id] = new Enemy(e.x, e.y, e.scale, e.hurts, e.id, e.health);
+                console.log(e.clan);
+                if(e.clan == "X"){
+                    this.objects.entities[e.id] = new ex(e.x, e.y, e.scale, e.hurts, e.id, e.health);
+                }
+                else if(e.clan == "O"){
+                    this.objects.entities[e.id] = new eo(e.x, e.y, e.scale, e.hurts, e.id, e.health);
+                }
             }
         })
+        Object.keys(w.zones).forEach((zone => {
+            const z = w.zones[zone];
+            this.objects.zones[zone].health = z.health;
+            this.objects.zones[zone].capped = z.capped;
+        }))
     }
 }
 
@@ -264,8 +480,8 @@ canvas.onmousedown = function(e) {
  }
 
  document.addEventListener('mousemove', (e) => {
-    mx = e.x;
-    my = e.y;
+    mx = e.x - marginL;
+    my = e.y - marginT;
  });
 
  canvas.onmouseup = function(e){
@@ -273,17 +489,26 @@ canvas.onmousedown = function(e) {
     keys.mouse.framesSince = 0; // reset the mouse timer
  }
 var keys = {"up" :false, "down" : false, "left": false, "right": false, mouse: {v: false, framesSince: 0}};
-var p = new Player(Math.floor(Math.random() * 150), 0, 52, 10, 7, uuidv4(), 30);
 var mx; // mouse x updated on click
 var my; // mouse y updated on click
-
+var enemyOnZ = false; // used to keep track if any enemies are on zones
 function update(){
+
     ctx.clearRect(0, 0, canvas.width, canvas.height); // clear canvas
     p.checkKeys(keys);
+    // update zones
+    Object.keys(world.objects["zones"]).forEach(zone => {
+        world.objects["zones"][zone].checkInZone(Object.values(world.objects.entities));
+        world.objects["zones"][zone].draw(ctx);
+    })
     // update entities
     Object.keys(world.objects["entities"]).forEach(e => {
         world.objects["entities"][e].update();
         world.objects["entities"][e].draw(ctx);
+        if(e.id != p.id){
+            Object.keys(world.objects["zones"]).every(zone => {
+            })
+        }
     });
     // update bullets
     Object.keys(world.objects["bullets"]).forEach(e => {
@@ -292,7 +517,7 @@ function update(){
     });
     // check for collisions
     Object.keys(world.objects["bullets"]).forEach(bullet => {
-        if(world.objects["bullets"][bullet].parent != p.id){
+        if(world.objects["bullets"][bullet].parent != p.clan){
             p.checkCollides(world.objects["bullets"][bullet]); // calls the checkCollides event for both
         }
 
@@ -312,16 +537,21 @@ async function connectToServer() {
     });
 }   
 var ws;
-var world = new World([p], []);
-world.newField("bullets", []); // stores all bullets
+var clan = "X"; // what side we are on
+var p; // us
+var world; // the world
+var connected = false; // used to wait until we connnected to server
+const z = new Zone(300, 0, 600, 0, "hello");
 async function init() {
     ws = await connectToServer();
-    ws.send(JSON.stringify({type: "join", id: p.id}));
+    ws.send(JSON.stringify({type: "getClan"})); // ask server what clan we are on
+
     ws.onmessage = (message) => {
         const data = JSON.parse(message.data);
         // on player move
         // example {x: 0, y: 0}
         if(data.type == "movement"){
+            console.log(data);
             world.objects.entities[data.id].x = data["x"];
             world.objects.entities[data.id].y = data["y"];
         }
@@ -350,8 +580,20 @@ async function init() {
         if(data.type == "hurt"){
             world.objects.entities[data.id].health -= data.amount;
         }
-        if(data.type == "join"){ // add new "enemy"\
-            world.appendField("entities", new Enemy(100, 100, 52, 10, data.id, 30));
+        if(data.type == "zoneChange"){
+            world.objects.zones[data.id].capped[data.clan] = data.amount;
+        }
+        if(data.type == "zoneCap"){
+            world.objects.zones[data.id].capped = data.clan;
+        }
+        if(data.type == "join"){ // add new "enemy"
+            if(data.clan == "X"){
+                world.appendField("entities", new ex(100, 100, 52, 10, data.id, 30));
+            }
+            if(data.clan == "O"){
+                world.appendField("entities", new eo(100, 100, 52, 10, data.id, 30));
+            }
+            console.log(world);
         }
         // give us a new id
         if(data.type == "giveId"){
@@ -361,18 +603,44 @@ async function init() {
         if(data.type == 'getW'){
             ws.send(JSON.stringify({"type": "giveW", socket: data.socket, "world": JSON.stringify(world.objects)})); // the socket is who will receive the world
         }
+        if(data.type == "reset"){
+            world.objects.entities[data.id].x = data.x;
+            world.objects.entities[data.id].y = data.y;
+            world.objects.entities[data.id].health = data.health;
+        }
 
-        // we just joined and need a new world
+
+        // we just joined and need a new world also get wether or not X or O
         if(data.type == "receiveW"){
             world.generateWorld(JSON.parse(data.world)); // turns json into world
+            console.log(data.world)
+            console.log(world);
+            update();
+        }
+
+        // {clan: x/o}
+        if(data.type == "getClan"){
+            clan = data.clan;
+            console.log(clan)
+                // create the world
+            if(clan == "X"){
+                p = new px(Math.floor(Math.random() * 150), 0, 52, 10, 7, uuidv4(), 30);
+            }else if (clan == "O"){
+                p = new po(Math.floor(Math.random() * 150), 0, 52, 10, 7, uuidv4(), 30);
+            }
+            world = new World([p], []);
+            world.newField("bullets", []); // stores all bullets
+            world.newField("zones", [z]); // stores all bullets
+
+            ws.send(JSON.stringify({"type": "join", "id": p.id, "clan": clan}));
+
         }
 
         if(data.type == "leave"){
             delete world.objects.entities[data.id]; // just remove who left
         }
+        console.log(data.type);
     };
-    
-    update();
 }
 
 init();
