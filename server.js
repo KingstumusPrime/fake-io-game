@@ -1,5 +1,5 @@
-import WebSocket, { WebSocketServer } from 'ws';
-const ws = new WebSocketServer({
+const WebSocket = require('ws');
+const ws = new WebSocket.WebSocketServer({
   port: 7071,
   perMessageDeflate: {
     zlibDeflateOptions: {
