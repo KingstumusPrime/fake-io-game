@@ -1,6 +1,6 @@
 const http = require("http");
 
-const host = '';
+const host = 'tic-attack-toe-game.onrender.com';
 const port = 8000;
 
 const requestListener = function (req, res) {
