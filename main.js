@@ -40,12 +40,6 @@ canvas.width = 2700;
 canvas.height = 2700;
 var board = ["", "", "", "", "", "", "", "", ""]
 
-function uuidv4() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-}
 
 class actor{ // base class for all players/objects
     constructor(x, y, scale=1, hurts, c="", id="", health=null){
@@ -81,7 +75,7 @@ class actor{ // base class for all players/objects
 class entity extends actor{ // something that moves on the server
     constructor(x, y, scale, hurts, c="", id="", health=null){
         super(x, y, scale, hurts, c, id, health); //call the actors constructor
-        this.maxHealth = health;
+        this.maxHealth = 60;
     }
 
     moveBy(x, y){
@@ -93,6 +87,7 @@ class entity extends actor{ // something that moves on the server
         if(this.inBounds(a)){
             this.onCollide(a);
             if(a.c == "bullet"){
+                broadcastAll(`kb|${a.id}`);
                 a.onKill();
             }
             if(this.health <= 0){
@@ -104,18 +99,16 @@ class entity extends actor{ // something that moves on the server
     onCollide(a){
         if(this.health != null && a.health != null){
             this.health -= a.hurts;
-            ws.send(JSON.stringify({"type": "hurt", id: this.id, amount: a.hurts}));
         }
     }
     onKill(){
-        ws.send(JSON.stringify({type: "kill", id: this.id})); // remove from EVERY world
         delete world.objects.entities[this.id]; // remove from world
     }
 }
 
 
 class Player extends entity{
-    constructor(x, y, scale, hurts, speed, id="", health=-1){
+    constructor(x, y, scale, hurts, speed, clan, id="", health=-1){
         super(x, y, scale, hurts, "player", id, health); //call the entities constructor
         this.speed = speed;
         this.clan = clan;
@@ -125,19 +118,16 @@ class Player extends entity{
 
         if(keys.left && !(this.x < 0)){
             this.moveBy(-this.speed, 0);
-            ws.send(JSON.stringify({type: "movement", "x": p.x, "y": p.y, id: this.id})); // send our new position to the server
+
         }
         if(keys.right && !(this.x  + this.scale > canvas.width)){
             this.moveBy(this.speed, 0);
-            ws.send(JSON.stringify({type: "movement","x": p.x, "y": p.y, id: this.id})); // send our new position to the server
         }
         if(keys.up && !(this.y < 0)){
             this.moveBy(0, -this.speed);
-            ws.send(JSON.stringify({type: "movement","x": p.x, "y": p.y, id: this.id})); // send our new position to the server
         }
         if(keys.down && !(this.y  + this.scale > canvas.height)){
             this.moveBy(0, this.speed);
-            ws.send(JSON.stringify({type: "movement","x": p.x, "y": p.y, id: this.id})); // send our new position to the server
         }
         if(keys.mouse.v){
             keys.mouse.framesSince += 1;
@@ -145,8 +135,9 @@ class Player extends entity{
         if(keys.mouse.v == true && keys.mouse.framesSince % 12 == 0) { // mouse button down fire bullet
             const mag = Math.sqrt((mx - this.x) * (mx - this.x) + (my - this.y) * (my - this.y));
             const rand = Math.random();
-            world.appendField("bullets", new Bullet(this.x + this.scale/2, this.y + this.scale/2, 10, 10, 7, (mx - this.x) / mag, (my - this.y) / mag, 0,this.id + rand, this.clan, 1) );
-            ws.send(JSON.stringify({type: "bullet", x: this.x + this.scale/2 , y: this.y + this.scale/2, mx: mx, my: my, parent: this.clan, id: this.id + rand }));
+            const b = new Bullet(this.x + this.scale/2, this.y + this.scale/2, 10, 10, 7, (mx - this.x) / mag, (my - this.y) / mag, 0,this.id + rand, this.clan, 1);
+            broadcastAll(`b|${b.id}|${b.x}|${b.y}|${b.vx}|${b.vy}|${b.parent}`);
+            world.appendField("bullets", b );
         }
         if(this.x +  marginL > window.screen.width * 0.4){
             marginL -= 7;
@@ -170,7 +161,6 @@ class Player extends entity{
         this.x = Math.floor(Math.random() * canvas.width);
         this.y = Math.floor(Math.random() * canvas.height);
         this.health = this.maxHealth;
-        ws.send(JSON.stringify({type: "reset", id: this.id, x: this.x, y: this.y, health: this.health}))
     }
 
     
@@ -178,7 +168,7 @@ class Player extends entity{
 
 class px extends Player{ // player that is an x
     constructor(x, y, scale, hurts, speed, id="", health=-1){
-        super(x, y, scale, hurts, "X", id, health); //call the player constructor
+        super(x, y, scale, hurts, speed, "X", id, health); //call the player constructor
         this.speed = speed;
     }
 
@@ -213,8 +203,7 @@ class px extends Player{ // player that is an x
 
 class po extends Player{ // player that is an O
     constructor(x, y, scale, hurts, speed, id="", health=-1){
-        super(x, y, scale, hurts, "O", id, health); //call the player constructor
-        this.speed = speed;
+        super(x, y, scale, hurts, speed, "O", id, health); //call the player constructor
     }
 
     // changed draw function
@@ -323,17 +312,14 @@ class Bullet extends entity{
     }
 
     onKill(){
-        console.log("kill B");
-        console.log(this.id);
         delete world.objects["bullets"][this.id];
-        ws.send(JSON.stringify({type: "killB", id: this.id}));
     }
 }
 
 // the zone that is captured
 class Zone extends entity{
     constructor(x, y, scale, hurts, id){
-        super(x, y, scale, hurts, "zone", id, 350); //call the entities constructor
+        super(x, y, scale, hurts, "zone", id, 600); //call the entities constructor
         this.capped = {"X": this.maxHealth, "O" : this.maxHealth};
     }
 
@@ -341,7 +327,6 @@ class Zone extends entity{
     draw(ctx){
         const scale = this.scale * 0.5; // half of the box is used
         ctx.save();
-        ctx.font = "48px serif";
         if(this.capped["O"] != this.maxHealth){
             this.health = this.capped["O"];
             ctx.strokeStyle = "blue";
@@ -353,7 +338,11 @@ class Zone extends entity{
 
 
         ctx.strokeRect(this.x, this.y, this.scale, this.scale);
-        ctx.strokeRect(this.x + (this.scale - (this.scale * (this.health/this.maxHealth)))/2, this.y+ (this.scale - (this.scale * (this.health/this.maxHealth)))/2, this.scale * (this.health/this.maxHealth), this.scale * (this.health/this.maxHealth));
+        const bSize = this.scale * (this.health/this.maxHealth)
+        if(this.health/this.maxHealth < 1 && this.health/this.maxHealth > 0){
+            ctx.strokeRect(this.x + (this.scale - bSize)/2, this.y+ (this.scale - bSize)/2, bSize, bSize);
+        }
+
         if(this.capped["X"] <= 0){ // the zone is captured by an X
             board[this.id] = "X"
             ctx.save(); // get settings
@@ -388,17 +377,10 @@ class Zone extends entity{
             if(a.clan == "X"){
                 this.capped[a.clan] -= a.hurts;
                 this.capped["O"] = this.maxHealth;
-                ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.capped[a.clan], clan: a.clan}));
-                ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.maxHealth, clan: "O"}));
             }else{
                 this.capped[a.clan] -= a.hurts;
                 this.capped["X"] = this.maxHealth;
-                ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.capped[a.clan], clan: a.clan}));
-                ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.maxHealth, clan: "X"}));
             }
-        }
-        if(this.health <= 0){
-            ws.send(JSON.stringify({"type": "zoneCap", id: this.id, clan: this.capped}));
         }
     }
 
@@ -415,17 +397,12 @@ class Zone extends entity{
                 }
             }
         });
-        console.log(hasO);
         if(hasX > 0 && !hasO > 0){
             this.capped["X"] -= 1;
             this.capped["O"] = this.maxHealth;
-            ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.capped["X"], clan: "X"}));
-            ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.maxHealth, clan: "O"}));
         } else if(!hasX > 0 && hasO > 0){
             this.capped["O"] -= 1;
             this.capped["X"] = this.maxHealth;
-            ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.capped["O"], clan: "O"}));
-            ws.send(JSON.stringify({"type": "zoneChange", id: this.id, amount: this.maxHealth, clan: "X"}));
         }
     }
 
@@ -532,19 +509,22 @@ function update(){
 
     ctx.clearRect(0, 0, canvas.width, canvas.height); // clear canvas
     p.checkKeys(keys);
-    // update zones
+    // update zones if host
     Object.keys(world.objects["zones"]).forEach(zone => {
-        world.objects["zones"][zone].checkInZone(Object.values(world.objects.entities));
-        world.objects["zones"][zone].draw(ctx);
+        if(isHost){
+            const z = world.objects["zones"][zone];
+            z.checkInZone(Object.values(world.objects.entities));
+            broadcastAll(`z|${zone}|${z.capped["X"]}|${z.capped["O"]}`);
+        }
+
+    world.objects["zones"][zone].draw(ctx);
+
     })
+
     // update entities
     Object.keys(world.objects["entities"]).forEach(e => {
         world.objects["entities"][e].update();
         world.objects["entities"][e].draw(ctx);
-        if(e.id != p.id){
-            Object.keys(world.objects["zones"]).every(zone => {
-            })
-        }
     });
     // update bullets
     Object.keys(world.objects["bullets"]).forEach(e => {
@@ -559,31 +539,23 @@ function update(){
 
     })
     if(checkTicTacToe(board) != ""){
+        ctx.font = "100px serif";
         ctx.fillText(checkTicTacToe(board), window.screen.width/2 - marginL,  window.screen.height/2 - marginT);
         fSinceW += 1;
-        if(fSinceW == 1000){
+        if(fSinceW == 500){
             p.onKill();
             Object.keys(world.objects["zones"]).forEach(zone => {
                 world.objects["zones"][zone].capped["X"] = world.objects["zones"][zone].maxHealth;
                 world.objects["zones"][zone].capped["O"] = world.objects["zones"][zone].maxHealth;
             })
+            board = ["", "", "", "","","","","",""]
         }
     }
+    broadcastAll(`${p.id}|${p.x}|${p.y}|${p.health}`);
     window.requestAnimationFrame(update);
 
 }
 
-async function connectToServer() {
-    const ws = new WebSocket('ws://localhost:7071/ws');
-    return new Promise((resolve, reject) => {
-        const timer = setInterval(() => {
-            if(ws.readyState === 1) {
-                clearInterval(timer)
-                resolve(ws);
-            }
-        }, 10);
-    });
-}   
 var ws;
 var clan = "X"; // what side we are on
 var p; // us
@@ -598,106 +570,155 @@ const z6 = new Zone(1800, 1100,600, 0, 5);
 const z7 = new Zone(300, 1800, 600, 0, 6);
 const z8 = new Zone(1100, 1800, 600, 0, 7);
 const z9 = new Zone(1800, 1800, 600, 0, 8);
+var isHost = false; // host is first person on the server
+var peer; // our peer
+var conns = new Map(); // our connection
+async function getPeers(){
+    const response = await fetch("https://tic-attack-toe-server.onrender.com/myapp/peerjs/peers");
+
+    const peersArr = await response.json();
+    if(peer.id == peersArr[0]){
+        isHost = true;
+    }else{
+        isHost = false;
+    }
+    const list = peersArr ?? [];
+    return list.filter((id) => id !== peer.id);
+}
+
+function broadcastAll(message){
+    for(let [c, actor] of conns){
+        c.send(message);
+    }
+}
 
 async function init() {
-    ws = await connectToServer();
-    ws.send(JSON.stringify({type: "getClan"})); // ask server what clan we are on
 
-    ws.onmessage = (message) => {
-        const data = JSON.parse(message.data);
-        // on player move
-        // example {x: 0, y: 0}
-        if(data.type == "movement"){
-            console.log(data);
-            world.objects.entities[data.id].x = data["x"];
-            world.objects.entities[data.id].y = data["y"];
-        }
-
-        // spawns a new bullet
-        // {x: 0, y: 0, mx: 0, my: 0, id}
-        if(data.type == "bullet"){
-            const mag = Math.sqrt((data.mx - data.x) * (data.mx - data.x) + (data.my - data.y) * (data.my - data.y));
-            world.appendField("bullets", new Bullet(data.x, data.y, 10, 10, 7, (data.mx - data.x) / mag, (data.my - data.y) / mag, 0, data.id, data.parent, 1) );
-        }
-
-        // kills someone
-        // {id: xxxxxxx-xxxxxxxxxx-xxxxxxxxx}
-        if(data.type == "kill"){
-            delete world.objects.entities[data.id]; // remove from world
-        }
-        // kills a bullet
-        // {id: xxxxxxx-xxxxxxxxxx-xxxxxxxxx}
-        if(data.type == "killB"){
-            console.log("KILL B")
-            console.log(data.id)
-            delete world.objects["bullets"][data.id];
-        }
-        // changes health
-        // {id: xxxxxxxx, amount: 0}
-        if(data.type == "hurt"){
-            world.objects.entities[data.id].health -= data.amount;
-        }
-        if(data.type == "zoneChange"){
-            world.objects.zones[data.id].capped[data.clan] = data.amount;
-        }
-        if(data.type == "zoneCap"){
-            world.objects.zones[data.id].capped = data.clan;
-        }
-        if(data.type == "join"){ // add new "enemy"
-            if(data.clan == "X"){
-                world.appendField("entities", new ex(100, 100, 52, 10, data.id, 30));
-            }
-            if(data.clan == "O"){
-                world.appendField("entities", new eo(100, 100, 52, 10, data.id, 30));
-            }
-            console.log(world);
-        }
-        // give us a new id
-        if(data.type == "giveId"){
-            world.objects.entities[p.id].id = data.id; // give the id
-        }
-        // server is asking for a current world
-        if(data.type == 'getW'){
-            ws.send(JSON.stringify({"type": "giveW", socket: data.socket, "world": JSON.stringify(world.objects)})); // the socket is who will receive the world
-        }
-        if(data.type == "reset"){
-            world.objects.entities[data.id].x = data.x;
-            world.objects.entities[data.id].y = data.y;
-            world.objects.entities[data.id].health = data.health;
-        }
+    peer = await new Peer('', {
+        host: 'tic-attack-toe-server.onrender.com',
+        port: '443',
+        path: '/myapp',
+        key: 'peerjs'
+      });
 
 
-        // we just joined and need a new world also get wether or not X or O
-        if(data.type == "receiveW"){
-            world.generateWorld(JSON.parse(data.world)); // turns json into world
-            console.log(data.world)
-            console.log(world);
-            update();
+    peer.on('open', async function(id) {
+        //p = new po( Math.floor(Math.random() * canvas.width), Math.floor(Math.random() * canvas.height), 52, 10, 7, uuidv4(), 60);
+
+
+
+        console.log('My peer ID is: ' + id);
+        const peers = await getPeers();
+
+        console.log()
+        if((peers.length + 1)%2 == 0 ){
+            p = new po(10, 10, 52, 10, 7, id, 60);
+        }else{
+            p = new px(10, 10, 52, 10, 7, id, 60)
         }
+        console.log(p);
+        world = new World([p], []);
+        world.newField("bullets", []); // stores all bullets
+        world.newField("zones", [z1, z2, z3, z4, z5, z6, z7, z8, z9]); // stores all bullets
 
-        // {clan: x/o}
-        if(data.type == "getClan"){
-            clan = data.clan;
-            console.log(clan)
-                // create the world
-            if(clan == "X"){
-                p = new px( Math.floor(Math.random() * canvas.width), Math.floor(Math.random() * canvas.height), 52, 10, 7, uuidv4(), 60);
-            }else if (clan == "O"){
-                p = new po( Math.floor(Math.random() * canvas.width), Math.floor(Math.random() * canvas.height), 52, 10, 7, uuidv4(), 60);
-            }
-            world = new World([p], []);
-            world.newField("bullets", []); // stores all bullets
-            world.newField("zones", [z1, z2, z3, z4, z5, z6, z7, z8, z9]); // stores all bullets
+        console.log("connecting too", peers[0]);
+        peers.forEach(p => {
+            const conn = peer.connect(p, {reliable: true})
+            conns.set(conn, "");
+            conn.on("open", () => {
+                console.log("CONNECTED TO SOMEONE");
+                broadcastAll(`join|${peer.id}|${p.clan}`);
+                conn.on("data", (d) => {
+                    console.log("RECIVED SOME DATA!, ", d);
+                    const data = d.split("|"); 
+                    if(data[0] == "join"){
+                        let enemy;
+                        console.log(data[2]);
+                        if(data[2] == "X"){
+                           enemy = new ex(100, 100, 52, 10, data[1], 30);
+                        }else{
+                            enemy = new eo(100, 100, 52, 10, data[1], 30);                       
+                        }
+                        world.objects.entities[data[1]] = enemy;
+                    }else if(data[0] == "b"){
+                        const b =  new Bullet(parseInt(data[2]), parseInt(data[3]), 10, 10,1.3, parseInt(data[4]), parseInt(data[5]), 0, data[1], data[6], 1 );
+                        world.objects.bullets[data[1]] = b;
+                        console.log(b);
+                    } if (data[0] == "kb"){
+                        delete world.objects.bullets[data[1]];
+                    } if(data[0] == "z"){
+                        console.log(world.objects["zones"][parseInt(data[1])]);
+                        world.objects["zones"][parseInt(data[1])].capped["X"] = parseInt(data[2]);
+                        world.objects["zones"][parseInt(data[1])].capped["O"] = parseInt(data[3]);
+                    }else if(data[0] == "newHost"){
+                        getPeers();
+                    }else{ // message is as follows: id|x|y|health
+                        world.objects.entities[data[0]].x = parseInt(data[1]);
+                        world.objects.entities[data[0]].y = parseInt(data[2]);
+                        world.objects.entities[data[0]].health = parseInt(data[3]);
+                    }
+                })
+                conn.on("close", () => {
+                    console.log("conn close event");
+                    delete world.objects.entities[conn.peer];
+                });
+                window.addEventListener("unload", () => {
+                    conn.close();
+                });
+            });
 
-            ws.send(JSON.stringify({"type": "join", "id": p.id, "clan": clan}));
+        })
+        peer.on("connection", (conn) => {
+            conn.on("data", function(d) {
+                console.log("RECIVED SOME DATA!, ", d);
+                const data = d.split("|"); 
 
-        }
+                if(data[0] == "join"){
+                    conns.set(conn, "");
+                    conn.send(`join|${peer.id}|${p.clan}`);
+                    let enemy;
+                    if(data[2] == "X"){
+                       enemy = new ex(100, 100, 52, 10, data[1], 30);
+                    }else{
+                        enemy = new eo(100, 100, 52, 10, data[1], 30);                       
+                    }
 
-        if(data.type == "leave"){
-            delete world.objects.entities[data.id]; // just remove who left
-        }
-        console.log(data.type);
-    };
+                    world.appendField("entities", enemy);
+                }else if(data[0] == "b"){
+                    const b =  new Bullet(parseInt(data[2]), parseInt(data[3]), 10, 10,1.3, parseInt(data[4]), parseInt(data[5]), 0, data[1], data[6], 1 );
+                    world.objects.bullets[data[1]] = b;
+                    console.log(b);
+                }else if(data[0] == "z"){
+                    console.log(world.objects["zones"][parseInt(data[1])]);
+                    world.objects["zones"][parseInt(data[1])].capped["X"] = parseInt(data[2]);
+                    world.objects["zones"][parseInt(data[1])].capped["O"] = parseInt(data[3]);
+                }else if(data[0] == "newHost"){
+                    getPeers();
+                }else{ // message is as follows: id|x|y|health
+                    console.log(world.objects.entities[data[0]]);
+                    world.objects.entities[data[0]].x = parseInt(data[1]);
+                    world.objects.entities[data[0]].y = parseInt(data[2]);
+                    world.objects.entities[data[0]].health = parseInt(data[3]);
+                }
+
+                conn.on("close", () => {
+                    console.log("conn close event");
+                    delete world.objects.entities[conn.peer];
+                })
+
+                window.addEventListener("unload", () => {
+                    if(isHost){
+                        broadcastAll("newHost|");
+                    }
+                    conn.close();
+                });
+            });
+
+
+        });
+
+        update();
+      });
 }
 
 init();

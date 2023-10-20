@@ -1,1 +1,1 @@
-const
+ws.send

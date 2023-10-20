@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "replicate": "^0.20.0",
-    "ws": "^8.14.2"
-  }
-}
